@@ -1,0 +1,9 @@
+[Main]
+Product=HeliumOS
+Version=10
+BugURL=your distribution provided bug reporting tool
+IsFinal=True
+UUID=202406170355.x86_64
+Variant=BaseOS
+[Compose]
+Lorax=34.9.25-1
