@@ -24,6 +24,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Free disk space (runner)
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h
+          # These folders are large on GitHub-hosted runners and not needed here.
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo rm -rf /usr/share/swift || true
+          sudo apt-get clean || true
+          df -h
+
       - name: Resolve release tag
         shell: bash
         run: |
@@ -42,10 +56,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          df -h
           mkdir -p dist output/arm64
           gh release download "$RELEASE_TAG" -R "${{ github.repository }}" -D dist
           ls -lah dist
           cat dist/HeliumOS-10-latest-aarch64-boot.iso.part-* > output/arm64/HeliumOS-10-latest-aarch64-boot.iso
+          df -h
 
       - name: Verify checksum (best-effort)
         shell: bash
@@ -70,6 +86,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          df -h
           cat > Dockerfile <<'EOF'
           FROM scratch
           ADD output/arm64/HeliumOS-10-latest-aarch64-boot.iso /HeliumOS-10-latest-aarch64-boot.iso
@@ -77,6 +94,8 @@ jobs:
 
           docker buildx build \
             --platform linux/arm64 \
+            --provenance=false \
+            --sbom=false \
             -t "ghcr.io/${{ github.repository }}:${IMAGE_TAG}" \
             -t "ghcr.io/${{ github.repository }}:10-aarch64-latest" \
             --push \
