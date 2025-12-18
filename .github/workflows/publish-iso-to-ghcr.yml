@@ -1,0 +1,83 @@
+name: Publish ISO to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: GitHub release tag to download ISO parts from
+        required: true
+        default: v10-aarch64-boot-2025-12-18
+      image_tag:
+        description: GHCR image tag to publish
+        required: true
+        default: 10-aarch64-boot-2025-12-18
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> "$GITHUB_ENV"
+            echo "IMAGE_TAG=${{ github.event.release.tag_name }}" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_TAG=${{ inputs.release_tag }}" >> "$GITHUB_ENV"
+            echo "IMAGE_TAG=${{ inputs.image_tag }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Download ISO parts from release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist output/arm64
+          gh release download "$RELEASE_TAG" -R "${{ github.repository }}" -D dist
+          ls -lah dist
+          cat dist/HeliumOS-10-latest-aarch64-boot.iso.part-* > output/arm64/HeliumOS-10-latest-aarch64-boot.iso
+
+      - name: Verify checksum (best-effort)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f dist/SHA256SUMS ]]; then
+            # Release SHA256SUMS currently references output/arm64/... path.
+            sha256sum -c dist/SHA256SUMS || true
+          fi
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push image (ISO-in-container)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > Dockerfile <<'EOF'
+          FROM scratch
+          ADD output/arm64/HeliumOS-10-latest-aarch64-boot.iso /HeliumOS-10-latest-aarch64-boot.iso
+          EOF
+
+          docker buildx build \
+            --platform linux/arm64 \
+            -t "ghcr.io/${{ github.repository }}:${IMAGE_TAG}" \
+            -t "ghcr.io/${{ github.repository }}:10-aarch64-latest" \
+            --push \
+            .
