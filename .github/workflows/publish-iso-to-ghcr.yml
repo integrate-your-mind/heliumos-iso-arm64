@@ -68,8 +68,12 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -f dist/SHA256SUMS ]]; then
-            # Release SHA256SUMS currently references output/arm64/... path.
-            sha256sum -c dist/SHA256SUMS || true
+            expected="$(awk '{print $1}' dist/SHA256SUMS | head -n 1)"
+            actual="$(sha256sum output/arm64/HeliumOS-10-latest-aarch64-boot.iso | awk '{print $1}')"
+            if [[ "${expected}" != "${actual}" ]]; then
+              echo "checksum mismatch: expected=${expected} actual=${actual}" >&2
+              exit 1
+            fi
           fi
 
       - name: Set up Buildx
