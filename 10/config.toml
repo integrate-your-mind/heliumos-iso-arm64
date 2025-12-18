@@ -4,10 +4,6 @@ contents = """
 clearpart --all --initlabel --disklabel=gpt
 reqpart --add-boot
 part / --grow --fstype ext4
-
-%post
-bootc switch --mutate-in-place --transport registry oci.heliumos.org/heliumos/bootc:10
-%end
 """
 
 [customizations.installer.modules]
